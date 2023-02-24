@@ -45,6 +45,9 @@ class ChatgptWithVoiceroid(Frame):
         self.CONFIG_FILE = self.CONFIG_FOLDER + "\\config.json"
         self.LOG_FILE = os.path.basename(__file__).split(".")[0]+".log"
         self.APP_NAME = "ChatGPTの回答をVOICEROIDとかに喋ってもらうやつ"
+        self.SEPARATOR_CHARACTERS = [
+            "、", "。", "「", "」", "！", "？", ", ", ". "
+        ]
 
         # 変数
         self.config = {
@@ -118,11 +121,21 @@ class ChatgptWithVoiceroid(Frame):
     def send_message(self, event):
         message = self.sv_message.get()
         self.log_message(message)
+        prev_text = ""
+        all_text = ""
+        sentence = ""
         for data in self.chatbot.ask(message):
-            resp = data["message"]
+            message = data["message"][len(prev_text) :]
+            all_text = all_text + message
+            sentence = sentence + message
+            if message in self.SEPARATOR_CHARACTERS:
+                self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), sentence)
+                sentence = ""
+            prev_text = data["message"]
+            #resp = data["message"]
 
-        self.log_message(resp, self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID)))
-        self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), resp)
+        self.log_message(all_text, self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID)))
+        #self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), resp)
 
     def master_frame_save(self):
         filename = "ChatGPT-With-Voiceroid_{}.txt".format(datetime.now().strftime('%Y%m%d_%H%M%S'))
@@ -222,7 +235,7 @@ class ChatgptWithVoiceroid(Frame):
         self.save_config()
         # ChatGPTの準備
         self.chatbot = Chatbot({ ConfigKey.ACCESS_TOKEN : self.config.get(ConfigKey.ACCESS_TOKEN) }, conversation_id=None)
-        self.chatbot.reset_chat()
+        #self.chatbot.reset_chat()
         try:
             for data in self.chatbot.ask("ping"):
                 resp = data["message"]
