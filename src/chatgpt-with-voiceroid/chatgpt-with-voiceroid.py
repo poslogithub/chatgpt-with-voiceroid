@@ -13,8 +13,7 @@ from tkinter import Frame, filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 import psutil
-import pyaudio
-import speech_recognition as sr
+#import speech_recognition as sr
 from revChatGPT.V1 import Chatbot
 
 from seikasay2 import SeikaSay2
@@ -42,7 +41,8 @@ class ChatgptWithVoiceroid(Frame):
         super().__init__(master)
 
         # 定数
-        self.CONFIG_FILE = ".config\\config.json"
+        self.CONFIG_FOLDER = "config"
+        self.CONFIG_FILE = self.CONFIG_FOLDER + "\\config.json"
         self.LOG_FILE = os.path.basename(__file__).split(".")[0]+".log"
         self.APP_NAME = "ChatGPTの回答をVOICEROIDとかに喋ってもらうやつ"
 
@@ -145,6 +145,8 @@ class ChatgptWithVoiceroid(Frame):
         return self.config
 
     def save_config(self, config_file=None, config=None):
+        if not os.path.exists(self.CONFIG_FOLDER):
+            os.makedirs(self.CONFIG_FOLDER)
         with open(config_file if config_file else self.CONFIG_FILE, 'w', encoding="utf_8_sig") as wf:
             json.dump(config if config else self.config, wf, indent=4, ensure_ascii=False)
 
@@ -175,24 +177,6 @@ class ChatgptWithVoiceroid(Frame):
                 except:
                     return None
         return None
-
-    # 多分いらない
-    def openWave(self):
-        wf = wave.open("./test.wav", "r")
-
-        p = pyaudio.PyAudio()
-        stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                        channels=wf.getnchannels(),
-                        rate=wf.getframerate(),
-                        output=True)
-
-        chunk = 1024
-        data = wf.readframes(chunk)
-        while data != b'':
-            stream.write(data)
-            data = wf.readframes(chunk)
-        stream.close()
-        p.terminate()
 
     def open_config_window(self):
         speaker_index = self.cids.index(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))

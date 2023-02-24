@@ -154,3 +154,4 @@ chargpt-with-voiceroid.log*
 .config*
 session.json
 SeikaSay2.exe
+src/chatgpt-with-voiceroid/icon.ico
