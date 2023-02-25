@@ -6,16 +6,18 @@ import re
 import sys
 import tkinter
 #import tkinter.simpledialog as simpledialog
-import wave
+#import wave
 import webbrowser
 from datetime import datetime
+from queue import Queue
+from threading import Thread
+from time import sleep
 from tkinter import Frame, filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 import psutil
 #import speech_recognition as sr
 from revChatGPT.V1 import Chatbot
-
 from seikasay2 import SeikaSay2
 
 
@@ -46,7 +48,7 @@ class ChatgptWithVoiceroid(Frame):
         self.LOG_FILE = os.path.basename(__file__).split(".")[0]+".log"
         self.APP_NAME = "ChatGPTの回答をVOICEROIDとかに喋ってもらうやつ"
         self.SEPARATOR_CHARACTERS = [
-            "、", "。", "「", "」", "！", "？", ", ", ". "
+            "。", "「", "」", "！", "？", ". ", "\n"
         ]
 
         # 変数
@@ -62,6 +64,8 @@ class ChatgptWithVoiceroid(Frame):
         self.cids = []
         self.speakers = []
         self.speaker_obj = {}
+        self.speaking = False
+        self.q = Queue()
 
         # GUI
         self.master.title(self.APP_NAME)
@@ -108,34 +112,51 @@ class ChatgptWithVoiceroid(Frame):
     def open_access_token_url(self):
         webbrowser.open(self.config.get(ConfigKey.SESSION_URL))
     
-    def log_message(self, message, speaker=None):
-        if not speaker:
-            speaker = "あなた"
-        log = speaker+"「"+message+"」"
-        self.logger.info(log)
+    def log_message(self, message):
+        self.logger.info(message)
         self.master_text.config(state="normal")
-        self.master_text.insert("end", log+"\n")
+        self.master_text.insert("end", message)
         self.master_text.yview_moveto(1)
         self.master_text.config(state="disabled")
 
     def send_message(self, event):
         message = self.sv_message.get()
-        self.log_message(message)
+        self.sv_message.set("")
+        thread = Thread(target=self.ask, args=(message,))
+        thread.start()
+        #self.log_message(all_text, self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID)))
+        #self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), resp)
+
+    def ask(self, message):
+        self.speaking = True
         prev_text = ""
         all_text = ""
         sentence = ""
+        self.log_message("あなた「"+message+"」\n")
+        self.log_message(self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))+"「")
         for data in self.chatbot.ask(message):
             message = data["message"][len(prev_text) :]
             all_text = all_text + message
             sentence = sentence + message
             if message in self.SEPARATOR_CHARACTERS:
-                self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), sentence)
+                self.log_message(sentence)
+                self.q.put(sentence)
+                #thread = Thread(target=self.speak, args=(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), sentence))
+                #thread.start()
                 sentence = ""
             prev_text = data["message"]
-            #resp = data["message"]
 
-        self.log_message(all_text, self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID)))
-        #self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), resp)
+        self.log_message("」\n")
+        self.speaking = False
+        return all_text
+
+    def speak_queue(self):
+        while True:
+            if self.q.empty():
+                sleep(0.1)
+            else:
+                sentence = self.q.get()
+                self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), sentence)
 
     def master_frame_save(self):
         filename = "ChatGPT-With-Voiceroid_{}.txt".format(datetime.now().strftime('%Y%m%d_%H%M%S'))
@@ -262,13 +283,14 @@ class ChatgptWithVoiceroid(Frame):
 
         # SeikaSay2存在チェック
         running = False
-        seika_say2_path = ProcessName.SEIKA_SAY2
+        seika_say2_path = self.config.get(ConfigKey.SEIKA_SAY2_PATH)
         while not running:
             if os.path.exists(seika_say2_path):
                 running = True
             else:
                 messagebox.showinfo(ProcessName.SEIKA_SAY2+" 存在確認", "{} が見つかりませんでした。\r\nこの後に表示されるファイルダイアログで {} を選択してください。".format(ProcessName.SEIKA_SAY2, ProcessName.SEIKA_SAY2))
                 seika_say2_path = filedialog.askopenfilename(filetype=[(ProcessName.SEIKA_SAY2,"*.exe")], initialdir=os.getcwd())
+                self.config[ConfigKey.SEIKA_SAY2_PATH] = seika_say2_path
         self.seikasay2 = SeikaSay2(seika_say2_path)
 
         # AssistantSeikaから話者一覧取得
@@ -298,6 +320,9 @@ class ChatgptWithVoiceroid(Frame):
         self.logger.info("話者: {}".format(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.NAME)))
 
         # メインループ開始
+        thread = Thread(target=self.speak_queue)
+        thread.setDaemon(True)
+        thread.start()
         self.master.mainloop()
 
 
