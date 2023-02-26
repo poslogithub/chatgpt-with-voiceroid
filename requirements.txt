@@ -1,2 +1,4 @@
 #SpeechRecognition
+psutil
 revChatGPT
+rfc3986<2

@@ -48,7 +48,7 @@ class ChatgptWithVoiceroid(Frame):
         self.LOG_FILE = os.path.basename(__file__).split(".")[0]+".log"
         self.APP_NAME = "ChatGPTの回答をVOICEROIDとかに喋ってもらうやつ"
         self.SEPARATOR_CHARACTERS = [
-            "。", "「", "」", "！", "？", ". ", "\n"
+            "、", "。", "！", "？", ". ", "'", '"', "!", "?", "\n"
         ]
 
         # 変数
@@ -65,6 +65,7 @@ class ChatgptWithVoiceroid(Frame):
         self.speakers = []
         self.speaker_obj = {}
         self.speaking = False
+        self.stop_speaking = False
         self.q = Queue()
 
         # GUI
@@ -83,6 +84,10 @@ class ChatgptWithVoiceroid(Frame):
         self.master_quit.pack(fill='x', padx=10, pady=5, side = 'right')
         self.master_save = ttk.Button(self.master_frame, text="　保存　", command=self.master_frame_save)
         self.master_save.pack(fill='x', padx=10, pady=5, side = 'right')
+        self.master_stop = ttk.Button(self.master_frame, text="発話中断", command=self.master_frame_stop)
+        #self.master_stop.pack(fill='x', padx=10, pady=5, side = 'right')
+        self.master_reset = ttk.Button(self.master_frame, text="会話をリセット", command=self.master_frame_reset)
+        #self.master_reset.pack(fill='x', padx=10, pady=5, side = 'right')
 
         # logger
         self.logger = logging.getLogger(__name__)
@@ -124,8 +129,6 @@ class ChatgptWithVoiceroid(Frame):
         self.sv_message.set("")
         thread = Thread(target=self.ask, args=(message,))
         thread.start()
-        #self.log_message(all_text, self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID)))
-        #self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), resp)
 
     def ask(self, message):
         self.speaking = True
@@ -135,6 +138,9 @@ class ChatgptWithVoiceroid(Frame):
         self.log_message("あなた「"+message+"」\n")
         self.log_message(self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))+"「")
         for data in self.chatbot.ask(message):
+            if self.stop_speaking:
+                self.stop_speaking = False
+                break
             message = data["message"][len(prev_text) :]
             all_text = all_text + message
             sentence = sentence + message
@@ -147,15 +153,15 @@ class ChatgptWithVoiceroid(Frame):
             prev_text = data["message"]
 
         self.log_message("」\n")
+        #self.q.join()
         self.speaking = False
         return all_text
 
     def speak_queue(self):
         while True:
-            if self.q.empty():
-                sleep(0.1)
-            else:
-                sentence = self.q.get()
+            sentence = self.q.get()
+            sentence = sentence.strip()
+            if sentence:
                 self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), sentence)
 
     def master_frame_save(self):
@@ -168,6 +174,18 @@ class ChatgptWithVoiceroid(Frame):
     def master_frame_quit(self):
         if messagebox.askyesno("ChatGPTの回答をVOICEROIDとかに喋ってもらうやつ 終了確認", "終了してよろしいですか？"):
             self.master.destroy()
+
+    def master_frame_stop(self):
+        self.stop_speaking = True
+        try:
+            while self.q.get_nowait():
+                pass
+        except Exception as e:
+            pass
+
+    def master_frame_reset(self):
+        if messagebox.askyesno("ChatGPTの回答をVOICEROIDとかに喋ってもらうやつ リセット確認", "会話をリセットしてよろしいですか？"):
+            self.chatbot.reset_chat()
 
     def load_config(self, config_file=None):
         if not config_file:
@@ -320,8 +338,7 @@ class ChatgptWithVoiceroid(Frame):
         self.logger.info("話者: {}".format(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.NAME)))
 
         # メインループ開始
-        thread = Thread(target=self.speak_queue)
-        thread.setDaemon(True)
+        thread = Thread(target=self.speak_queue, daemon=True)
         thread.start()
         self.master.mainloop()
 
