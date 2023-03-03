@@ -17,7 +17,6 @@ from tkinter.scrolledtext import ScrolledText
 
 import psutil
 #import speech_recognition as sr
-from revChatGPT.V1 import Chatbot
 from seikasay2 import SeikaSay2
 
 
@@ -32,6 +31,7 @@ class ConfigKey:
     NAME = "name"
     SESSION_URL = "sessionUrl"
     ACCESS_TOKEN = "access_token"
+    USE_API ="useApi"
 
 
 class ConfigValue:
@@ -48,12 +48,13 @@ class ChatgptWithVoiceroid(Frame):
         self.LOG_FILE = os.path.basename(__file__).split(".")[0]+".log"
         self.APP_NAME = "ChatGPTの回答をVOICEROIDとかに喋ってもらうやつ"
         self.SEPARATOR_CHARACTERS = [
-            "、", "。", "！", "？", ". ", "'", '"', "!", "?", "\n"
+            "。", "！", "？", ". ", "!", "?", "\n"
         ]
 
         # 変数
         self.config = {
             ConfigKey.SEIKA_SAY2_PATH : ".\\"+ProcessName.SEIKA_SAY2,
+            ConfigKey.USE_API : False,
             ConfigKey.SPEAKER : {
                 ConfigKey.CID : 0,
                 ConfigKey.NAME : ""
@@ -147,8 +148,6 @@ class ChatgptWithVoiceroid(Frame):
             if message in self.SEPARATOR_CHARACTERS:
                 self.log_message(sentence)
                 self.q.put(sentence)
-                #thread = Thread(target=self.speak, args=(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), sentence))
-                #thread.start()
                 sentence = ""
             prev_text = data["message"]
 
@@ -234,31 +233,40 @@ class ChatgptWithVoiceroid(Frame):
         speaker_index = self.cids.index(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))
         self.config_window = tkinter.Toplevel(self)
         self.config_window.title(self.APP_NAME + " - 設定ウィンドウ")
-        self.config_window.geometry("560x120")
+        self.config_window.geometry("560x160")
         self.config_window.grab_set()   # モーダルにする
         self.config_window.focus_set()  # フォーカスを新しいウィンドウをへ移す
         self.config_window.transient(self.master)   # タスクバーに表示しない
         self.config_frame = ttk.Frame(self.config_window)
         self.config_frame.grid(row=0, column=0, sticky=tkinter.NSEW, padx=5, pady=5)
+        self.bv_use_api = tkinter.BooleanVar()
+        self.bv_use_api.set(self.config.get(ConfigKey.USE_API))
         self.sv_access_token = tkinter.StringVar()
         self.sv_access_token.set(self.config.get(ConfigKey.ACCESS_TOKEN))
         self.sv_seikasay2_path = tkinter.StringVar()
         self.sv_seikasay2_path.set(self.config.get(ConfigKey.SEIKA_SAY2_PATH))
         self.sv_speaker = tkinter.StringVar()
         combobox_width = 44
-        label_access_token = ttk.Label(self.config_frame, text="Access token: ", anchor="w")
-        label_access_token.grid(row=0, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
-        entry_access_token = ttk.Entry(self.config_frame, width=60, textvariable=self.sv_access_token)
-        entry_access_token.grid(row=0, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        use_api_frame = ttk.Frame(self.config_frame)
+        use_api_frame.grid(row=0, column=0, columnspan=3, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        radio_use_api_false = ttk.Radiobutton(use_api_frame, text="chat.openai.comを使う (無料)", variable=self.bv_use_api, value=False)
+        radio_use_api_false.grid(row=0, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        radio_use_api_true = ttk.Radiobutton(use_api_frame, text="公式APIを使う (有料)", variable=self.bv_use_api, value=True)
+        radio_use_api_true.grid(row=0, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         button_access_token = ttk.Button(self.config_frame, text="　開く　", command=self.open_access_token_url)
-        button_access_token.grid(row=0, column=2, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        label_access_token = ttk.Label(self.config_frame, text="Access token: ", anchor="w")
+        label_access_token.grid(row=1, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        entry_access_token = ttk.Entry(self.config_frame, width=60, textvariable=self.sv_access_token)
+        entry_access_token.grid(row=1, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        button_access_token = ttk.Button(self.config_frame, text="　開く　", command=self.open_access_token_url)
+        button_access_token.grid(row=1, column=2, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         label_speaker = ttk.Label(self.config_frame, text="話者: ", anchor="w")
-        label_speaker.grid(row=1, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        label_speaker.grid(row=2, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         combobox_speaker = ttk.Combobox(self.config_frame, width=combobox_width, values=self.speakers, textvariable=self.sv_speaker, state="readonly")
         combobox_speaker.current(speaker_index)
-        combobox_speaker.grid(row=1, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        combobox_speaker.grid(row=2, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         button_ok = ttk.Button(self.config_frame, text="　開始　", command=self.config_window_ok)
-        button_ok.grid(row=2, column=2, sticky=tkinter.E, padx=5, pady=10)
+        button_ok.grid(row=3, column=2, sticky=tkinter.E, padx=5, pady=10)
         self.wait_window(self.config_window)
 
     def config_window_seikasay2(self):
@@ -268,13 +276,17 @@ class ChatgptWithVoiceroid(Frame):
 
     def config_window_ok(self):
         self.config[ConfigKey.SEIKA_SAY2_PATH] = self.sv_seikasay2_path.get()
+        self.config[ConfigKey.USE_API] = self.bv_use_api.get()
+        self.config[ConfigKey.ACCESS_TOKEN] = self.sv_access_token.get()
         self.config[ConfigKey.SPEAKER][ConfigKey.CID] = self.sv_speaker.get().split(" ")[0]
         self.config[ConfigKey.SPEAKER][ConfigKey.NAME] = self.sv_speaker.get()
-        self.config[ConfigKey.ACCESS_TOKEN] = self.sv_access_token.get()
         self.save_config()
         # ChatGPTの準備
-        self.chatbot = Chatbot({ ConfigKey.ACCESS_TOKEN : self.config.get(ConfigKey.ACCESS_TOKEN) }, conversation_id=None)
-        #self.chatbot.reset_chat()
+        if self.config.get(ConfigKey.USE_API):
+            from revChatGPT.V3 import Chatbot
+        else:
+            from revChatGPT.V1 import Chatbot
+        self.chatbot = Chatbot({ ConfigKey.ACCESS_TOKEN : self.config.get(ConfigKey.ACCESS_TOKEN) })
         try:
             for data in self.chatbot.ask("ping"):
                 resp = data["message"]
