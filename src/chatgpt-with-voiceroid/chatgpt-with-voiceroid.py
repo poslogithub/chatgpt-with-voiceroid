@@ -30,6 +30,7 @@ class ConfigKey:
     CID = "cid"
     NAME = "name"
     SESSION_URL = "sessionUrl"
+    API_KEYS_URL = "apiKeysUrl"
     ACCESS_TOKEN = "access_token"
     USE_API ="useApi"
 
@@ -60,6 +61,7 @@ class ChatgptWithVoiceroid(Frame):
                 ConfigKey.NAME : ""
             },
             ConfigKey.SESSION_URL : "https://chat.openai.com/api/auth/session",
+            ConfigKey.API_KEYS_URL : "https://platform.openai.com/account/api-keys",
             ConfigKey.ACCESS_TOKEN : ""
         }
         self.cids = []
@@ -116,7 +118,10 @@ class ChatgptWithVoiceroid(Frame):
             self.logger.info("Loading {}: NG".format(self.CONFIG_FILE))
 
     def open_access_token_url(self):
-        webbrowser.open(self.config.get(ConfigKey.SESSION_URL))
+        if self.bv_use_api.get():
+            webbrowser.open(self.config.get(ConfigKey.API_KEYS_URL))
+        else:
+            webbrowser.open(self.config.get(ConfigKey.SESSION_URL))
     
     def log_message(self, message):
         self.logger.info(message)
@@ -132,29 +137,47 @@ class ChatgptWithVoiceroid(Frame):
         thread.start()
 
     def ask(self, message):
-        self.speaking = True
-        prev_text = ""
-        all_text = ""
-        sentence = ""
-        self.log_message("あなた「"+message+"」\n")
-        self.log_message(self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))+"「")
-        for data in self.chatbot.ask(message):
-            if self.stop_speaking:
-                self.stop_speaking = False
-                break
-            message = data["message"][len(prev_text) :]
-            all_text = all_text + message
-            sentence = sentence + message
-            if message in self.SEPARATOR_CHARACTERS:
-                self.log_message(sentence)
-                self.q.put(sentence)
-                sentence = ""
-            prev_text = data["message"]
+        if self.config.get(ConfigKey.USE_API):
+            prev_text = ""
+            all_text = ""
+            sentence = ""
+            self.log_message("あなた「"+message+"」\n")
+            self.log_message(self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))+"「")
+            resp = ""
+            for data in self.chatbot.ask(message):
+                resp = resp + data
+                if data in self.SEPARATOR_CHARACTERS:
+                    self.log_message(resp)
+                    self.q.put(resp)
+                    resp = ""
 
-        self.log_message("」\n")
-        #self.q.join()
-        self.speaking = False
-        return all_text
+            self.log_message("」\n")
+            #self.q.join()
+            self.speaking = False
+        else:
+            self.speaking = True
+            prev_text = ""
+            all_text = ""
+            sentence = ""
+            self.log_message("あなた「"+message+"」\n")
+            self.log_message(self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))+"「")
+            for data in self.chatbot.ask(message):
+                if self.stop_speaking:
+                    self.stop_speaking = False
+                    break
+                message = data["message"][len(prev_text) :]
+                all_text = all_text + message
+                sentence = sentence + message
+                if message in self.SEPARATOR_CHARACTERS:
+                    self.log_message(sentence)
+                    self.q.put(sentence)
+                    sentence = ""
+                prev_text = data["message"]
+
+            self.log_message("」\n")
+            #self.q.join()
+            self.speaking = False
+            return all_text
 
     def speak_queue(self):
         while True:
@@ -253,7 +276,6 @@ class ChatgptWithVoiceroid(Frame):
         radio_use_api_false.grid(row=0, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         radio_use_api_true = ttk.Radiobutton(use_api_frame, text="公式APIを使う (有料)", variable=self.bv_use_api, value=True)
         radio_use_api_true.grid(row=0, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
-        button_access_token = ttk.Button(self.config_frame, text="　開く　", command=self.open_access_token_url)
         label_access_token = ttk.Label(self.config_frame, text="Access token: ", anchor="w")
         label_access_token.grid(row=1, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         entry_access_token = ttk.Entry(self.config_frame, width=60, textvariable=self.sv_access_token)
@@ -284,19 +306,34 @@ class ChatgptWithVoiceroid(Frame):
         # ChatGPTの準備
         if self.config.get(ConfigKey.USE_API):
             from revChatGPT.V3 import Chatbot
+            self.chatbot = Chatbot(self.config.get(ConfigKey.ACCESS_TOKEN))
         else:
             from revChatGPT.V1 import Chatbot
-        self.chatbot = Chatbot({ ConfigKey.ACCESS_TOKEN : self.config.get(ConfigKey.ACCESS_TOKEN) })
-        try:
-            for data in self.chatbot.ask("ping"):
-                resp = data["message"]
-            if resp:
-                self.config_window.destroy()
-            else:
-                messagebox.showerror(self.APP_NAME, "ChatGPTから応答がありませんでした。")
-        except Exception as e:
-            self.logger.error(e)
-            messagebox.showerror(self.APP_NAME, "ChatGPTとの通信に失敗しました。\nAccess Tokenが誤っていないか確認してください。")
+            self.chatbot = Chatbot({ ConfigKey.ACCESS_TOKEN : self.config.get(ConfigKey.ACCESS_TOKEN) })
+
+        if self.config.get(ConfigKey.USE_API):
+            try:
+                resp = ""
+                for data in self.chatbot.ask("ping"):
+                    resp = resp + data
+                if resp:
+                    self.config_window.destroy()
+                else:
+                    messagebox.showerror(self.APP_NAME, "ChatGPTから応答がありませんでした。")
+            except Exception as e:
+                self.logger.error(e)
+                messagebox.showerror(self.APP_NAME, "ChatGPTとの通信に失敗しました。\nAccess Tokenが誤っていないか確認してください。")
+        else:
+            try:
+                for data in self.chatbot.ask("ping"):
+                    resp = data["message"]
+                if resp:
+                    self.config_window.destroy()
+                else:
+                    messagebox.showerror(self.APP_NAME, "ChatGPTから応答がありませんでした。")
+            except Exception as e:
+                self.logger.error(e)
+                messagebox.showerror(self.APP_NAME, "ChatGPTとの通信に失敗しました。\nAccess Tokenが誤っていないか確認してください。")
 
     def run(self):
         # AssistantSeika起動チェック
