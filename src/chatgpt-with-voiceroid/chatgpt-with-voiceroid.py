@@ -30,8 +30,9 @@ class ConfigKey:
     CID = "cid"
     NAME = "name"
     SESSION_URL = "sessionUrl"
-    API_KEYS_URL = "apiKeysUrl"
+    API_KEY_URL = "apiKeysUrl"
     ACCESS_TOKEN = "access_token"
+    API_KEY = "apiKey"
     USE_API ="useApi"
 
 
@@ -61,8 +62,9 @@ class ChatgptWithVoiceroid(Frame):
                 ConfigKey.NAME : ""
             },
             ConfigKey.SESSION_URL : "https://chat.openai.com/api/auth/session",
-            ConfigKey.API_KEYS_URL : "https://platform.openai.com/account/api-keys",
-            ConfigKey.ACCESS_TOKEN : ""
+            ConfigKey.API_KEY_URL : "https://platform.openai.com/account/api-keys",
+            ConfigKey.ACCESS_TOKEN : "",
+            ConfigKey.API_KEY : "",
         }
         self.cids = []
         self.speakers = []
@@ -118,10 +120,10 @@ class ChatgptWithVoiceroid(Frame):
             self.logger.info("Loading {}: NG".format(self.CONFIG_FILE))
 
     def open_access_token_url(self):
-        if self.bv_use_api.get():
-            webbrowser.open(self.config.get(ConfigKey.API_KEYS_URL))
-        else:
-            webbrowser.open(self.config.get(ConfigKey.SESSION_URL))
+        webbrowser.open(self.config.get(ConfigKey.SESSION_URL))
+    
+    def open_api_key_url(self):
+        webbrowser.open(self.config.get(ConfigKey.API_KEY_URL))
     
     def log_message(self, message):
         self.logger.info(message)
@@ -256,7 +258,7 @@ class ChatgptWithVoiceroid(Frame):
         speaker_index = self.cids.index(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))
         self.config_window = tkinter.Toplevel(self)
         self.config_window.title(self.APP_NAME + " - 設定ウィンドウ")
-        self.config_window.geometry("560x160")
+        self.config_window.geometry("560x200")
         self.config_window.grab_set()   # モーダルにする
         self.config_window.focus_set()  # フォーカスを新しいウィンドウをへ移す
         self.config_window.transient(self.master)   # タスクバーに表示しない
@@ -266,30 +268,47 @@ class ChatgptWithVoiceroid(Frame):
         self.bv_use_api.set(self.config.get(ConfigKey.USE_API))
         self.sv_access_token = tkinter.StringVar()
         self.sv_access_token.set(self.config.get(ConfigKey.ACCESS_TOKEN))
+        self.sv_api_key = tkinter.StringVar()
+        self.sv_api_key.set(self.config.get(ConfigKey.API_KEY))
         self.sv_seikasay2_path = tkinter.StringVar()
         self.sv_seikasay2_path.set(self.config.get(ConfigKey.SEIKA_SAY2_PATH))
         self.sv_speaker = tkinter.StringVar()
         combobox_width = 44
         use_api_frame = ttk.Frame(self.config_frame)
         use_api_frame.grid(row=0, column=0, columnspan=3, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
-        radio_use_api_false = ttk.Radiobutton(use_api_frame, text="chat.openai.comを使う (無料)", variable=self.bv_use_api, value=False)
+        radio_use_api_false = ttk.Radiobutton(use_api_frame, text="chat.openai.comを使う (無料)", variable=self.bv_use_api, value=False, command=self.change_radio_use_api)
         radio_use_api_false.grid(row=0, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
-        radio_use_api_true = ttk.Radiobutton(use_api_frame, text="公式APIを使う (有料)", variable=self.bv_use_api, value=True)
+        radio_use_api_true = ttk.Radiobutton(use_api_frame, text="公式APIを使う (有料)", variable=self.bv_use_api, value=True, command=self.change_radio_use_api)
         radio_use_api_true.grid(row=0, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         label_access_token = ttk.Label(self.config_frame, text="Access token: ", anchor="w")
         label_access_token.grid(row=1, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
-        entry_access_token = ttk.Entry(self.config_frame, width=60, textvariable=self.sv_access_token)
-        entry_access_token.grid(row=1, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        self.entry_access_token = ttk.Entry(self.config_frame, width=60, textvariable=self.sv_access_token)
+        self.entry_access_token.grid(row=1, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         button_access_token = ttk.Button(self.config_frame, text="　開く　", command=self.open_access_token_url)
         button_access_token.grid(row=1, column=2, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        label_api_key = ttk.Label(self.config_frame, text="API Key: ", anchor="w")
+        label_api_key.grid(row=2, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        self.entry_api_key = ttk.Entry(self.config_frame, width=60, textvariable=self.sv_api_key)
+        self.entry_api_key.grid(row=2, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        button_api_key = ttk.Button(self.config_frame, text="　開く　", command=self.open_api_key_url)
+        button_api_key.grid(row=2, column=2, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         label_speaker = ttk.Label(self.config_frame, text="話者: ", anchor="w")
-        label_speaker.grid(row=2, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        label_speaker.grid(row=3, column=0, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         combobox_speaker = ttk.Combobox(self.config_frame, width=combobox_width, values=self.speakers, textvariable=self.sv_speaker, state="readonly")
         combobox_speaker.current(speaker_index)
-        combobox_speaker.grid(row=2, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
+        combobox_speaker.grid(row=3, column=1, sticky=tkinter.W + tkinter.E, padx=5, pady=5)
         button_ok = ttk.Button(self.config_frame, text="　開始　", command=self.config_window_ok)
-        button_ok.grid(row=3, column=2, sticky=tkinter.E, padx=5, pady=10)
+        button_ok.grid(row=4, column=2, sticky=tkinter.E, padx=5, pady=10)
+        self.change_radio_use_api()
         self.wait_window(self.config_window)
+
+    def change_radio_use_api(self):
+        if self.bv_use_api.get():
+            self.entry_access_token.configure(state=tkinter.DISABLED)
+            self.entry_api_key.configure(state=tkinter.NORMAL)
+        else:
+            self.entry_access_token.configure(state=tkinter.NORMAL)
+            self.entry_api_key.configure(state=tkinter.DISABLED)
 
     def config_window_seikasay2(self):
         path = filedialog.askopenfilename(filetype=[("実行ファイル","*.exe")], initialdir=os.getcwd())
@@ -300,6 +319,7 @@ class ChatgptWithVoiceroid(Frame):
         self.config[ConfigKey.SEIKA_SAY2_PATH] = self.sv_seikasay2_path.get()
         self.config[ConfigKey.USE_API] = self.bv_use_api.get()
         self.config[ConfigKey.ACCESS_TOKEN] = self.sv_access_token.get()
+        self.config[ConfigKey.API_KEY] = self.sv_api_key.get()
         self.config[ConfigKey.SPEAKER][ConfigKey.CID] = self.sv_speaker.get().split(" ")[0]
         self.config[ConfigKey.SPEAKER][ConfigKey.NAME] = self.sv_speaker.get()
         self.save_config()
