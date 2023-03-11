@@ -5,8 +5,6 @@ import os
 import re
 import sys
 import tkinter
-#import tkinter.simpledialog as simpledialog
-#import wave
 import webbrowser
 from datetime import datetime
 from queue import Queue
@@ -16,7 +14,7 @@ from tkinter import Frame, filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 import psutil
-#import speech_recognition as sr
+import speech_recognition as sr
 from seikasay2 import SeikaSay2
 
 
@@ -195,6 +193,21 @@ class ChatgptWithVoiceroid(Frame):
             sentence = sentence.strip()
             if sentence:
                 self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), sentence)
+
+    def mic_input(self):
+        while True:
+            with self.mic as source:
+                self.r.adjust_for_ambient_noise(source)
+
+                try:
+                    audio = self.r.listen(source)
+                    text = self.r.recognize_google(audio, language='ja-JP')
+                except sr.UnknownValueError:
+                    text = ""
+                if text:
+                    self.q_ask.put(text)
+                    text = ""
+                    sleep(1)
 
     def master_frame_save(self):
         filename = "ChatGPT-With-Voiceroid_{}.txt".format(datetime.now().strftime('%Y%m%d_%H%M%S'))
@@ -414,12 +427,17 @@ class ChatgptWithVoiceroid(Frame):
         self.open_config_window()
         self.logger.info("話者: {}".format(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.NAME)))
 
+        self.r = sr.Recognizer()
+        self.mic = sr.Microphone()
+
         # メインループ開始
         thread = Thread(target=self.ask_queue, daemon=True)
         thread.start()
         thread = Thread(target=self.text_queue, daemon=True)
         thread.start()
         thread = Thread(target=self.speak_queue, daemon=True)
+        thread.start()
+        thread = Thread(target=self.mic_input, daemon=True)
         thread.start()
         self.master.mainloop()
 
