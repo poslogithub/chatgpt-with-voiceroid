@@ -50,7 +50,7 @@ class ChatgptWithVoiceroid(Frame):
         self.LOG_FILE = os.path.basename(__file__).split(".")[0]+".log"
         self.APP_NAME = "ChatGPTの回答をVOICEROIDとかに喋ってもらうやつ"
         self.SEPARATOR_CHARACTERS = [
-            "。", "！", "？", ". ", "!", "?", "\n"
+            "。", "！", "？", ".", "!", "?", "\n"
         ]
 
         # 変数
@@ -326,7 +326,7 @@ class ChatgptWithVoiceroid(Frame):
         # ChatGPTの準備
         if self.config.get(ConfigKey.USE_API):
             from revChatGPT.V3 import Chatbot
-            self.chatbot = Chatbot(self.config.get(ConfigKey.ACCESS_TOKEN))
+            self.chatbot = Chatbot(self.config.get(ConfigKey.API_KEY))
         else:
             from revChatGPT.V1 import Chatbot
             self.chatbot = Chatbot({ ConfigKey.ACCESS_TOKEN : self.config.get(ConfigKey.ACCESS_TOKEN) })
