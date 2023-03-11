@@ -156,3 +156,4 @@ SeikaSay2.exe
 src/chatgpt-with-voiceroid/icon.ico
 chatgpt-with-voiceroid.log*
 config/config.json
+!chatgpt-with-voiceroid.spec
