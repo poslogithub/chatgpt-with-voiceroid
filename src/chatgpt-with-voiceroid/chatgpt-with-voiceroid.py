@@ -69,8 +69,10 @@ class ChatgptWithVoiceroid(Frame):
         self.cids = []
         self.speakers = []
         self.speaker_obj = {}
-        self.speaking = False
-        self.stop_speaking = False
+        self.asking = False
+        self.q_ask = Queue()
+        self.q_text = Queue()
+        self.q_speak = Queue()
         self.q = Queue()
 
         # GUI
@@ -89,9 +91,9 @@ class ChatgptWithVoiceroid(Frame):
         self.master_quit.pack(fill='x', padx=10, pady=5, side = 'right')
         self.master_save = ttk.Button(self.master_frame, text="　保存　", command=self.master_frame_save)
         self.master_save.pack(fill='x', padx=10, pady=5, side = 'right')
-        self.master_stop = ttk.Button(self.master_frame, text="発話中断", command=self.master_frame_stop)
+        #self.master_stop = ttk.Button(self.master_frame, text="発話中断", command=self.master_frame_stop)
         #self.master_stop.pack(fill='x', padx=10, pady=5, side = 'right')
-        self.master_reset = ttk.Button(self.master_frame, text="会話をリセット", command=self.master_frame_reset)
+        #self.master_reset = ttk.Button(self.master_frame, text="会話をリセット", command=self.master_frame_reset)
         #self.master_reset.pack(fill='x', padx=10, pady=5, side = 'right')
 
         # logger
@@ -135,55 +137,61 @@ class ChatgptWithVoiceroid(Frame):
     def send_message(self, event):
         message = self.sv_message.get()
         self.sv_message.set("")
-        thread = Thread(target=self.ask, args=(message,))
-        thread.start()
+        self.q_ask.put(message)
 
     def ask(self, message):
         if self.config.get(ConfigKey.USE_API):
-            prev_text = ""
-            all_text = ""
-            sentence = ""
-            self.log_message("あなた「"+message+"」\n")
-            self.log_message(self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))+"「")
+            self.q_text.put("あなた「"+message+"」\n")
+            self.q_text.put(self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))+"「")
             resp = ""
             for data in self.chatbot.ask(message):
                 resp = resp + data
                 if data in self.SEPARATOR_CHARACTERS:
-                    self.log_message(resp)
-                    self.q.put(resp)
+                    #self.log_message(resp)
+                    self.q_text.put(resp)
+                    if self.q_ask.empty():
+                        self.q_speak.put(resp)
                     resp = ""
-
-            self.log_message("」\n")
-            #self.q.join()
-            self.speaking = False
+            self.q_text.put("」")
         else:
-            self.speaking = True
             prev_text = ""
             all_text = ""
             sentence = ""
-            self.log_message("あなた「"+message+"」\n")
-            self.log_message(self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))+"「")
+            self.q_text.put("あなた「"+message+"」\n")
+            self.q_text.put(self.get_speaker_name(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID))+"「")
             for data in self.chatbot.ask(message):
-                if self.stop_speaking:
-                    self.stop_speaking = False
-                    break
                 message = data["message"][len(prev_text) :]
                 all_text = all_text + message
                 sentence = sentence + message
                 if message in self.SEPARATOR_CHARACTERS:
-                    self.log_message(sentence)
-                    self.q.put(sentence)
+                    #self.log_message(sentence)
+                    self.q_text.put(sentence)
+                    if self.q_ask.empty():
+                        self.q_speak.put(sentence)
                     sentence = ""
                 prev_text = data["message"]
+            self.q_text.put("」\n")
+        self.asking = False
 
-            self.log_message("」\n")
-            #self.q.join()
-            self.speaking = False
-            return all_text
+    def ask_queue(self):
+        while True:
+            while self.asking:
+                sleep(0.1)
+            self.asking = True
+            question = self.q_ask.get()
+            question = question.strip()
+            if question:
+                self.ask(question)
+
+    def text_queue(self):
+        while True:
+            text = self.q_text.get()
+            if text:
+                self.log_message(text)
 
     def speak_queue(self):
         while True:
-            sentence = self.q.get()
+            sentence = self.q_speak.get()
             sentence = sentence.strip()
             if sentence:
                 self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), sentence)
@@ -407,6 +415,10 @@ class ChatgptWithVoiceroid(Frame):
         self.logger.info("話者: {}".format(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.NAME)))
 
         # メインループ開始
+        thread = Thread(target=self.ask_queue, daemon=True)
+        thread.start()
+        thread = Thread(target=self.text_queue, daemon=True)
+        thread.start()
         thread = Thread(target=self.speak_queue, daemon=True)
         thread.start()
         self.master.mainloop()
