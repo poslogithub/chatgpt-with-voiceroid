@@ -195,19 +195,17 @@ class ChatgptWithVoiceroid(Frame):
                 self.speak(self.config.get(ConfigKey.SPEAKER).get(ConfigKey.CID), sentence)
 
     def mic_input(self):
+        #self.r.adjust_for_ambient_noise(source)
         while True:
-            with self.mic as source:
-                self.r.adjust_for_ambient_noise(source)
-
-                try:
-                    audio = self.r.listen(source)
-                    text = self.r.recognize_google(audio, language='ja-JP')
-                except sr.UnknownValueError:
-                    text = ""
-                if text:
-                    self.q_ask.put(text)
-                    text = ""
-                    sleep(1)
+            try:
+                audio = self.r.listen(self.mic)
+                text = self.r.recognize_whisper(audio, language='japanese')
+            except sr.UnknownValueError:
+                text = ""
+            if text:
+                self.q_ask.put(text)
+                text = ""
+            sleep(0.1)
 
     def master_frame_save(self):
         filename = "ChatGPT-With-Voiceroid_{}.txt".format(datetime.now().strftime('%Y%m%d_%H%M%S'))
